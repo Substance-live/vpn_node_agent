@@ -1,8 +1,9 @@
 import time
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 
+from api.dependencies import verify_agent_secret
 from api.routers import health
 from core.config import settings
 from core.logging import configure_logging
@@ -23,9 +24,21 @@ app = FastAPI(
 app.state.start_monotonic = time.monotonic()
 
 # ── Routers ──────────────────────────────────────────────────────────────────
-app.include_router(health.router)          # Stage 1 — GET /api/v1/health
+app.include_router(health.router)          # Stage 1 — GET /api/v1/health (public)
 # app.include_router(mtproto.router)       # Stage 3 — GET /api/v1/mtproto/info
 # app.include_router(vless.router)         # Stage 5 — CRUD /api/v1/vless/users
+
+
+# ── TEMP: Stage 2 verification endpoint — remove when Stage 3 starts ─────────
+@app.get(
+    "/api/v1/ping",
+    tags=["debug"],
+    dependencies=[Depends(verify_agent_secret)],
+    summary="[TEMP] Auth check — remove in Stage 3",
+)
+async def ping() -> dict:
+    return {"pong": True}
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 if __name__ == "__main__":
