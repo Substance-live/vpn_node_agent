@@ -10,7 +10,8 @@ def configure_logging(log_level: str = "INFO", log_format: str = "json") -> None
     shared_processors: list = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
-        structlog.stdlib.add_logger_name,
+        # add_logger_name requires logging.Logger (.name attr); we use PrintLoggerFactory
+        # so we bind the logger name manually via structlog.get_logger("name")
         structlog.processors.TimeStamper(fmt="iso"),
     ]
 
