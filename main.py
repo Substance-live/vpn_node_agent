@@ -2,11 +2,11 @@ import time
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from adapters.mtg_adapter import MtgConfigError
-from adapters.xui_adapter import XuiAdapter, XuiError, XuiUnavailableError
+from adapters.xui_adapter import XuiAdapter
+from api.errors import AgentError, XuiClientAlreadyExistsError
 from api.routers import health, mtproto, vless
 from core.config import settings
 from core.logging import configure_logging, get_logger
@@ -54,40 +54,58 @@ app = FastAPI(
 
 # ── Exception handlers ────────────────────────────────────────────────────────
 
-@app.exception_handler(MtgConfigError)
-async def _mtg_config_error_handler(request, exc: MtgConfigError) -> JSONResponse:
+@app.exception_handler(AgentError)
+async def _agent_error_handler(request: Request, exc: AgentError) -> JSONResponse:
+    """Convert any AgentError subclass to a uniform JSON error envelope."""
+    if exc.status_code >= 500:
+        logger.warning(exc.error, details=str(exc), path=str(request.url.path))
+    content: dict = {
+        "error": exc.error,
+        "message": exc.message,
+        "details": str(exc),
+    }
+    # For idempotent create (409): include the existing client payload so the
+    # caller doesn't need an extra GET to learn the current state.
+    if isinstance(exc, XuiClientAlreadyExistsError) and exc.existing is not None:
+        content["existing"] = exc.existing
+    return JSONResponse(status_code=exc.status_code, content=content)
+
+
+@app.exception_handler(Exception)
+async def _unhandled_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Catch-all for unexpected errors — logs full traceback, returns 500."""
+    logger.error("unhandled_exception", path=str(request.url.path), exc_info=True)
     return JSONResponse(
-        status_code=502,
+        status_code=500,
         content={
-            "error": "mtg_config_error",
-            "message": "Cannot read MTProto config",
-            "details": str(exc),
+            "error": "internal_error",
+            "message": "Internal server error",
+            "details": "",
         },
     )
 
 
-@app.exception_handler(XuiUnavailableError)
-async def _xui_unavailable_handler(request, exc: XuiUnavailableError) -> JSONResponse:
-    return JSONResponse(
-        status_code=502,
-        content={
-            "error": "xui_unavailable",
-            "message": "Cannot connect to 3x-ui",
-            "details": str(exc),
-        },
-    )
+# ── Access-log middleware ──────────────────────────────────────────────────────
 
+@app.middleware("http")
+async def _log_requests(request: Request, call_next):
+    """Log method, path, status and duration for every request.
 
-@app.exception_handler(XuiError)
-async def _xui_error_handler(request, exc: XuiError) -> JSONResponse:
-    return JSONResponse(
-        status_code=502,
-        content={
-            "error": "xui_error",
-            "message": "3x-ui API error",
-            "details": str(exc),
-        },
-    )
+    Request body is intentionally NOT logged — it may contain secrets.
+    For 403 responses the client IP is included (unauthorized access attempt).
+    """
+    start = time.monotonic()
+    response = await call_next(request)
+    fields: dict = {
+        "method": request.method,
+        "path": request.url.path,
+        "status": response.status_code,
+        "duration_ms": round((time.monotonic() - start) * 1000, 1),
+    }
+    if response.status_code == 403:
+        fields["client_ip"] = request.client.host if request.client else None
+    logger.info("request", **fields)
+    return response
 
 
 # ── Routers ───────────────────────────────────────────────────────────────────

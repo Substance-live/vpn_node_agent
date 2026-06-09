@@ -17,15 +17,18 @@ from urllib.parse import quote, urlencode
 
 import httpx
 
+from api.errors import XuiError, XuiUnavailableError  # re-exported for callers
 
-# ── Exceptions ────────────────────────────────────────────────────────────────
-
-class XuiError(Exception):
-    """Raised when 3x-ui returns an error response or success=false."""
-
-
-class XuiUnavailableError(XuiError):
-    """Raised when the 3x-ui panel cannot be reached at all."""
+# Keep names in this module's namespace so existing imports like
+#   from adapters.xui_adapter import XuiError, XuiUnavailableError
+# continue to work unchanged.
+__all__ = [
+    "XuiError",
+    "XuiUnavailableError",
+    "generate_sub_id",
+    "build_vless_link",
+    "XuiAdapter",
+]
 
 
 # ── Module-level helpers ──────────────────────────────────────────────────────

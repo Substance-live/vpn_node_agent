@@ -23,7 +23,7 @@ class MtprotoInfoResponse(BaseModel):
 
 class VlessCreateRequest(BaseModel):
     external_id: str
-    expire_days: int
+    expire_days: int  # N>0 = now+N days; 0 = never expires; N<0 = already expired
     remark: str | None = None  # #label in vless:// link; defaults to external_id
 
 
@@ -38,5 +38,5 @@ class VlessUserResponse(BaseModel):
 
 
 class VlessUpdateRequest(BaseModel):
-    expire_days: int | None = None  # absolute: now+N days; 0 or -1 = never expires
+    expire_days: int | None = None  # N>0 = now+N days; 0 = never expires; N<0 = expired now
     is_enabled: bool | None = None

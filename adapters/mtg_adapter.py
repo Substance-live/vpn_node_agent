@@ -7,11 +7,8 @@ All operations are synchronous and cheap (single file read per call).
 
 import tomllib
 
+from api.errors import MtgConfigError  # re-exported for callers
 from core.config import settings
-
-
-class MtgConfigError(Exception):
-    """Raised when the mtg config cannot be read or is missing required fields."""
 
 
 class MtgAdapter:

@@ -3,11 +3,11 @@
 import time
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Response, status
 
 from adapters.xui_adapter import XuiAdapter, build_vless_link, generate_sub_id
 from api.dependencies import get_xui, verify_agent_secret
+from api.errors import XuiClientAlreadyExistsError, XuiClientNotFoundError
 from api.schemas import VlessCreateRequest, VlessUpdateRequest, VlessUserResponse
 from core.config import settings
 
@@ -18,6 +18,23 @@ router = APIRouter(
 )
 
 _INBOUND_ID = settings.XUI_VLESS_INBOUND_ID
+
+# 3x-ui treats any past timestamp as expired; 1 ms past epoch is safely in the past.
+_EXPIRED_MS = 1
+
+
+def _expiry_ms(expire_days: int) -> int:
+    """Map expire_days to a 3x-ui expiryTime (Unix ms).
+
+    N > 0  -> now + N days
+    N == 0 -> 0 (never expires)
+    N < 0  -> 1 (already expired — panel shows "expired" immediately)
+    """
+    if expire_days > 0:
+        return int((time.time() + expire_days * 86400) * 1000)
+    if expire_days == 0:
+        return 0
+    return _EXPIRED_MS
 
 
 async def _build_response(
@@ -50,28 +67,21 @@ async def _build_response(
 async def create_user(
     req: VlessCreateRequest,
     xui: XuiAdapter = Depends(get_xui),
-) -> VlessUserResponse | JSONResponse:
+) -> VlessUserResponse:
     inbound = await xui.get_inbound(_INBOUND_ID)
     existing = xui.find_client(inbound, req.external_id)
     if existing:
-        # Idempotent: return existing client data with 409 so caller knows it pre-existed
+        # Idempotent: raise 409 with full existing-client payload attached
         body = await _build_response(xui, inbound, existing, req.remark)
-        return JSONResponse(
-            status_code=status.HTTP_409_CONFLICT,
-            content=body.model_dump(),
-        )
+        raise XuiClientAlreadyExistsError(existing=body.model_dump())
 
-    expiry_ms = (
-        0 if req.expire_days <= 0
-        else int((time.time() + req.expire_days * 86400) * 1000)
-    )
     client_data = {
         "id": str(uuid.uuid4()),
         "flow": "xtls-rprx-vision",
         "email": req.external_id,
         "limitIp": 0,
         "totalGB": 0,
-        "expiryTime": expiry_ms,
+        "expiryTime": _expiry_ms(req.expire_days),
         "enable": True,
         "tgId": "",
         "subId": generate_sub_id(),
@@ -94,10 +104,7 @@ async def get_user(
     inbound = await xui.get_inbound(_INBOUND_ID)
     client = xui.find_client(inbound, external_id)
     if client is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="VLESS client not found",
-        )
+        raise XuiClientNotFoundError(f"No VLESS client with external_id={external_id!r}")
     return await _build_response(xui, inbound, client, external_id)
 
 
@@ -114,19 +121,12 @@ async def update_user(
     inbound = await xui.get_inbound(_INBOUND_ID)
     client = xui.find_client(inbound, external_id)
     if client is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="VLESS client not found",
-        )
+        raise XuiClientNotFoundError(f"No VLESS client with external_id={external_id!r}")
 
     client = dict(client)  # copy — never mutate the inbound dict in-place
 
     if req.expire_days is not None:
-        # Absolute semantics: 0 or -1 = never expires; N > 0 = now + N days
-        if req.expire_days <= 0:
-            client["expiryTime"] = 0
-        else:
-            client["expiryTime"] = int(time.time() * 1000) + req.expire_days * 86400 * 1000
+        client["expiryTime"] = _expiry_ms(req.expire_days)
 
     if req.is_enabled is not None:
         client["enable"] = req.is_enabled
@@ -147,9 +147,6 @@ async def delete_user(
     inbound = await xui.get_inbound(_INBOUND_ID)
     client = xui.find_client(inbound, external_id)
     if client is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="VLESS client not found",
-        )
+        raise XuiClientNotFoundError(f"No VLESS client with external_id={external_id!r}")
     await xui.delete_client(_INBOUND_ID, client["id"])
     return Response(status_code=status.HTTP_204_NO_CONTENT)
