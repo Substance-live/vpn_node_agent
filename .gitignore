@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Environment / secrets
+.env
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Docker build cache
+.dockerignore
+
+# TZ (internal specs, not for repo)
+tz/
