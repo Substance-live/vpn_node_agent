@@ -2,6 +2,7 @@ import time
 
 from fastapi import APIRouter, Request
 
+from adapters.mtg_adapter import mtg_adapter
 from api.schemas import HealthResponse
 
 router = APIRouter(prefix="/api/v1", tags=["health"])
@@ -13,13 +14,14 @@ async def health(request: Request) -> HealthResponse:
     Returns service status and uptime.
     No authorization required.
 
-    `vless_backend` and `mtproto_backend` are `"unknown"` until Stages 3 and 5
-    wire up real backend checks.
+    Backend status values: "ok" | "degraded" | "offline" | "unknown".
+    - `mtproto_backend`: real check against mtg config file (Stage 3+).
+    - `vless_backend`: real check against 3x-ui (Stage 5+).
     """
     uptime = time.monotonic() - request.app.state.start_monotonic
     return HealthResponse(
         status="ok",
-        vless_backend="unknown",
-        mtproto_backend="unknown",
+        vless_backend="unknown",          # wired up in Stage 5
+        mtproto_backend=mtg_adapter.check_health(),
         uptime_seconds=int(uptime),
     )

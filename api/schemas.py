@@ -10,5 +10,13 @@ class HealthResponse(BaseModel):
     uptime_seconds: int
 
 
-# ── Stage 3 ── MtprotoInfoResponse (populated in Stage 3)
-# ── Stage 5 ── VlessCreateRequest, VlessUserResponse, VlessUpdateRequest (Stage 5)
+# ── Stage 3 ──────────────────────────────────────────────────────────────────
+
+class MtprotoInfoResponse(BaseModel):
+    server: str
+    port: int
+    secret: str
+    tg_link: str
+
+
+# ── Stage 5 ── VlessCreateRequest, VlessUserResponse, VlessUpdateRequest

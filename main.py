@@ -1,10 +1,11 @@
 import time
 
 import uvicorn
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
-from api.dependencies import verify_agent_secret
-from api.routers import health
+from adapters.mtg_adapter import MtgConfigError
+from api.routers import health, mtproto
 from core.config import settings
 from core.logging import configure_logging
 
@@ -23,22 +24,25 @@ app = FastAPI(
 # Record the startup moment for uptime calculation
 app.state.start_monotonic = time.monotonic()
 
-# ── Routers ──────────────────────────────────────────────────────────────────
-app.include_router(health.router)          # Stage 1 — GET /api/v1/health (public)
-# app.include_router(mtproto.router)       # Stage 3 — GET /api/v1/mtproto/info
-# app.include_router(vless.router)         # Stage 5 — CRUD /api/v1/vless/users
+
+# ── Exception handlers ────────────────────────────────────────────────────────
+
+@app.exception_handler(MtgConfigError)
+async def _mtg_config_error_handler(request, exc: MtgConfigError) -> JSONResponse:
+    return JSONResponse(
+        status_code=502,
+        content={
+            "error": "mtg_config_error",
+            "message": "Cannot read MTProto config",
+            "details": str(exc),
+        },
+    )
 
 
-# ── TEMP: Stage 2 verification endpoint — remove when Stage 3 starts ─────────
-@app.get(
-    "/api/v1/ping",
-    tags=["debug"],
-    dependencies=[Depends(verify_agent_secret)],
-    summary="[TEMP] Auth check — remove in Stage 3",
-)
-async def ping() -> dict:
-    return {"pong": True}
-# ─────────────────────────────────────────────────────────────────────────────
+# ── Routers ───────────────────────────────────────────────────────────────────
+app.include_router(health.router)     # Stage 1 — GET /api/v1/health (public)
+app.include_router(mtproto.router)    # Stage 3 — GET /api/v1/mtproto/info (auth required)
+# app.include_router(vless.router)    # Stage 5 — CRUD /api/v1/vless/users
 
 
 if __name__ == "__main__":
