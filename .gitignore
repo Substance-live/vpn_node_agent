@@ -21,5 +21,10 @@ env/
 .vscode/
 *.iml
 
+# Runtime data & secrets (создаются scripts/init.sh — не для репо)
+db/
+cert/
+config/
+
 # TZ (internal specs, not for repo)
 tz/

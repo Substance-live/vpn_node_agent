@@ -1,0 +1,28 @@
+# ── Dev override для разработки node-agent ────────────────────────────────────
+# Использование:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up node-agent
+#   (или: make dev)
+#
+# Что меняется относительно docker-compose.yml:
+#   - Порт открыт на 0.0.0.0 (доступен с хост-машины, а не только localhost)
+#   - Исходники монтируются из текущего каталога (hot-mount без пересборки образа)
+#   - Uvicorn запускается с --reload (перезапуск при изменении .py файлов)
+#   - LOG_FORMAT=console — цветные структурированные логи вместо JSON
+#   - restart: "no" — не перезапускать контейнер автоматически
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  node-agent:
+    ports:
+      - "8080:8080"               # 0.0.0.0:8080 — доступен с хост-машины
+    volumes:
+      - .:/app                    # Исходники монтируются live; образ не нужно пересобирать
+    environment:
+      LOG_FORMAT: console         # Цветные dev-логи (structlog ConsoleRenderer)
+    command: >
+      uvicorn main:app
+      --host 0.0.0.0
+      --port 8080
+      --reload
+      --no-access-log
+    restart: "no"

@@ -26,3 +26,8 @@ Makefile
 scripts/
 *.md
 uv.lock
+
+# ── Рантайм-данные (создаются scripts/init.sh, не должны попасть в образ) ────
+db/
+cert/
+config/

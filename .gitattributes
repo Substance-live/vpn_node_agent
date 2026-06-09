@@ -1,0 +1,7 @@
+# Форсировать LF для файлов, которые деплоятся на Linux-серверы.
+# Без этого git на Windows создаст CRLF и bash/make сломаются.
+
+*.sh                 text eol=lf
+Makefile             text eol=lf
+Dockerfile           text eol=lf
+docker-compose*.yml  text eol=lf
