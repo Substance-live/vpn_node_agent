@@ -196,14 +196,18 @@ class XuiAdapter:
         data = await self._request("GET", f"/panel/api/inbounds/get/{inbound_id}")
         return self._parse_inbound(data["obj"])
 
-    async def get_client_by_email(self, email: str) -> dict | None:
-        """Search settings.clients[] in the inbound; return matching client or None."""
-        inbound = await self.get_inbound(self._inbound_id)
-        clients: list[dict] = inbound.get("settings", {}).get("clients", [])
-        for client in clients:
-            if client.get("email") == email:
-                return client
+    @staticmethod
+    def find_client(inbound: dict, email: str) -> dict | None:
+        """Search settings.clients[] in an already-fetched inbound; return match or None."""
+        for c in inbound.get("settings", {}).get("clients", []):
+            if c.get("email") == email:
+                return c
         return None
+
+    async def get_client_by_email(self, email: str) -> dict | None:
+        """Fetch the inbound and search for a client by email; return match or None."""
+        inbound = await self.get_inbound(self._inbound_id)
+        return self.find_client(inbound, email)
 
     async def get_client_traffic(self, email: str) -> dict | None:
         """Return traffic stats for a client (up/down bytes, enable, expiryTime).

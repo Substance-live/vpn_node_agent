@@ -1,8 +1,9 @@
 import secrets
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyHeader
 
+from adapters.xui_adapter import XuiAdapter
 from core.config import settings
 
 # Declares the X-Agent-Secret header as an API-key security scheme.
@@ -25,3 +26,8 @@ async def verify_agent_secret(provided: str = Depends(api_key_header)) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid agent secret",
         )
+
+
+def get_xui(request: Request) -> XuiAdapter:
+    """Return the XuiAdapter singleton created in lifespan."""
+    return request.app.state.xui

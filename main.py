@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 from adapters.mtg_adapter import MtgConfigError
 from adapters.xui_adapter import XuiAdapter, XuiError, XuiUnavailableError
-from api.routers import health, mtproto
+from api.routers import health, mtproto, vless
 from core.config import settings
 from core.logging import configure_logging, get_logger
 
@@ -93,7 +93,7 @@ async def _xui_error_handler(request, exc: XuiError) -> JSONResponse:
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(health.router)     # Stage 1 — GET /api/v1/health (public)
 app.include_router(mtproto.router)    # Stage 3 — GET /api/v1/mtproto/info (auth required)
-# app.include_router(vless.router)    # Stage 5 — CRUD /api/v1/vless/users
+app.include_router(vless.router)      # Stage 5 — CRUD /api/v1/vless/users
 
 
 if __name__ == "__main__":

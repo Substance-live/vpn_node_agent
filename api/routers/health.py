@@ -19,9 +19,10 @@ async def health(request: Request) -> HealthResponse:
     - `vless_backend`: real check against 3x-ui (Stage 5+).
     """
     uptime = time.monotonic() - request.app.state.start_monotonic
+    vless_ok = await request.app.state.xui.ping()
     return HealthResponse(
         status="ok",
-        vless_backend="unknown",          # wired up in Stage 5
+        vless_backend="ok" if vless_ok else "offline",
         mtproto_backend=mtg_adapter.check_health(),
         uptime_seconds=int(uptime),
     )
