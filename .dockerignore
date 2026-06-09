@@ -24,6 +24,7 @@ Dockerfile
 docker-compose*.yml
 Makefile
 scripts/
+nginx/
 *.md
 uv.lock
 

@@ -55,8 +55,10 @@ services:
       - "127.0.0.1:8080:8080"
     env_file: .env
     volumes:
-      # Тот же config.toml, что читает mtproto-proxy — секрет mtg
-      - ./config/mtg/config.toml:/etc/mtg/config.toml:ro
+      # Путь к config.toml mtg на хосте.
+      # Сценарий A (чистый стек):   MTG_CONFIG_HOST_PATH не задан → ./config/mtg/config.toml
+      # Сценарий B (mtg уже работает): MTG_CONFIG_HOST_PATH=/etc/mtg/config.toml в .env
+      - ${MTG_CONFIG_HOST_PATH:-./config/mtg/config.toml}:/etc/mtg/config.toml:ro
     extra_hosts:
       # host-gateway резолвится в IP хост-машины, нужен для доступа к 3x-ui
       - "host.docker.internal:host-gateway"
