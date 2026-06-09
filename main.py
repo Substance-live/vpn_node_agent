@@ -3,7 +3,10 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from adapters.xui_adapter import XuiAdapter
 from api.errors import AgentError, XuiClientAlreadyExistsError
@@ -54,6 +57,44 @@ app = FastAPI(
 
 # ── Exception handlers ────────────────────────────────────────────────────────
 
+# Maps common HTTP status codes to stable machine-readable error slugs.
+_HTTP_ERROR_CODES: dict[int, str] = {
+    400: "bad_request",
+    401: "unauthorized",
+    403: "forbidden",
+    404: "not_found",
+    405: "method_not_allowed",
+}
+
+
+@app.exception_handler(StarletteHTTPException)
+async def _http_exception_handler(
+    request: Request, exc: StarletteHTTPException
+) -> JSONResponse:
+    """Wrap FastAPI/Starlette HTTP errors (auth 403, route 404, …) in unified envelope."""
+    code = _HTTP_ERROR_CODES.get(exc.status_code, "http_error")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": code, "message": str(exc.detail), "details": ""},
+        headers=getattr(exc, "headers", None),
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    """Wrap Pydantic validation failures (422) in unified envelope with structured details."""
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "validation_error",
+            "message": "Request validation failed",
+            "details": jsonable_encoder(exc.errors()),
+        },
+    )
+
+
 @app.exception_handler(AgentError)
 async def _agent_error_handler(request: Request, exc: AgentError) -> JSONResponse:
     """Convert any AgentError subclass to a uniform JSON error envelope."""
@@ -102,7 +143,7 @@ async def _log_requests(request: Request, call_next):
         "status": response.status_code,
         "duration_ms": round((time.monotonic() - start) * 1000, 1),
     }
-    if response.status_code == 403:
+    if response.status_code in (401, 403):
         fields["client_ip"] = request.client.host if request.client else None
     logger.info("request", **fields)
     return response

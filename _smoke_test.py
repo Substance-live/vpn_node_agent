@@ -2,9 +2,22 @@
 import json
 import sys
 
+from fastapi import APIRouter as _APIRouter
 from fastapi.testclient import TestClient
 
 from main import app
+
+# Register a temporary error-trigger route to exercise the catch-all 500 handler.
+# Must be added before TestClient context so the route exists at request time.
+_tmp_router = _APIRouter()
+
+
+@_tmp_router.get("/api/v1/_test_error")
+async def _trigger_unhandled_error():
+    raise ValueError("intentional test error — catch-all check")
+
+
+app.include_router(_tmp_router)
 
 all_ok = True
 
@@ -44,12 +57,21 @@ with TestClient(app, raise_server_exceptions=False) as client:
     if not (ok_status and has_envelope):
         all_ok = False
 
-    # 4. POST without auth -> unified envelope (FastAPI 403)
-    print("\n-- 4. POST without auth -> 401/403 --")
+    # 4. POST without auth -> unified envelope (FastAPI 403, NOT {"detail": ...})
+    print("\n-- 4. POST without auth -> 403 unified envelope --")
     r = client.post("/api/v1/vless/users", json={"external_id": "x", "expire_days": 1})
-    ok = r.status_code in (401, 403)
-    print(f"  {'OK' if ok else 'FAIL'}  status={r.status_code}")
-    if not ok:
+    ok_status = r.status_code in (401, 403)
+    try:
+        body = json.loads(r.text)
+        has_envelope = {"error", "message", "details"} <= body.keys()
+        no_detail_key = "detail" not in body  # FastAPI default uses "detail"
+    except (json.JSONDecodeError, TypeError):
+        has_envelope = no_detail_key = False
+    print(f"  {'OK' if ok_status else 'FAIL'}  status={r.status_code}  (expected 403)")
+    print(f"  {'OK' if has_envelope else 'FAIL'}  JSON envelope has error/message/details keys")
+    print(f"  {'OK' if no_detail_key else 'FAIL'}  no raw 'detail' key (not default FastAPI format)")
+    print(f"         body={r.text[:120]!r}")
+    if not (ok_status and has_envelope and no_detail_key):
         all_ok = False
 
     # 5. GET /mtproto/info with bad MTG_CONFIG_PATH -> 502 mtg_config_error envelope
@@ -77,6 +99,63 @@ with TestClient(app, raise_server_exceptions=False) as client:
     ok = r.status_code == 200
     print(f"  {'OK' if ok else 'FAIL'}  /health after middleware wired: status={r.status_code}")
     if not ok:
+        all_ok = False
+
+    # 7. POST with auth but empty body -> 422 validation_error unified envelope
+    print("\n-- 7. POST with auth, empty body -> 422 unified envelope --")
+    r = client.post(
+        "/api/v1/vless/users",
+        json={},
+        headers={"X-Agent-Secret": "changeme"},
+    )
+    ok_status = r.status_code == 422
+    try:
+        body = json.loads(r.text)
+        ok_error = body.get("error") == "validation_error"
+        ok_details = isinstance(body.get("details"), list) and len(body["details"]) > 0
+        no_detail_key = "detail" not in body
+    except (json.JSONDecodeError, TypeError):
+        ok_error = ok_details = no_detail_key = False
+    print(f"  {'OK' if ok_status else 'FAIL'}  status={r.status_code}  (expected 422)")
+    print(f"  {'OK' if ok_error else 'FAIL'}  error=='validation_error'")
+    print(f"  {'OK' if ok_details else 'FAIL'}  details is non-empty list")
+    print(f"  {'OK' if no_detail_key else 'FAIL'}  no raw 'detail' key")
+    print(f"         body={r.text[:200]!r}")
+    if not (ok_status and ok_error and ok_details and no_detail_key):
+        all_ok = False
+
+    # 8. GET non-existent route -> 404 not_found unified envelope
+    print("\n-- 8. GET non-existent route -> 404 unified envelope --")
+    r = client.get("/api/v1/nope", headers={"X-Agent-Secret": "changeme"})
+    ok_status = r.status_code == 404
+    try:
+        body = json.loads(r.text)
+        ok_error = body.get("error") == "not_found"
+        no_detail_key = "detail" not in body
+    except (json.JSONDecodeError, TypeError):
+        ok_error = no_detail_key = False
+    print(f"  {'OK' if ok_status else 'FAIL'}  status={r.status_code}  (expected 404)")
+    print(f"  {'OK' if ok_error else 'FAIL'}  error=='not_found'")
+    print(f"  {'OK' if no_detail_key else 'FAIL'}  no raw 'detail' key")
+    print(f"         body={r.text[:120]!r}")
+    if not (ok_status and ok_error and no_detail_key):
+        all_ok = False
+
+    # 9. Unhandled ValueError -> 500 internal_error unified envelope (catch-all handler)
+    print("\n-- 9. Unhandled ValueError -> 500 unified envelope --")
+    r = client.get("/api/v1/_test_error")
+    ok_status = r.status_code == 500
+    try:
+        body = json.loads(r.text)
+        ok_error = body.get("error") == "internal_error"
+        no_detail_key = "detail" not in body
+    except (json.JSONDecodeError, TypeError):
+        ok_error = no_detail_key = False
+    print(f"  {'OK' if ok_status else 'FAIL'}  status={r.status_code}  (expected 500)")
+    print(f"  {'OK' if ok_error else 'FAIL'}  error=='internal_error'")
+    print(f"  {'OK' if no_detail_key else 'FAIL'}  no raw 'detail' key")
+    print(f"         body={r.text[:120]!r}")
+    if not (ok_status and ok_error and no_detail_key):
         all_ok = False
 
 print()
