@@ -38,5 +38,5 @@ class VlessUserResponse(BaseModel):
 
 
 class VlessUpdateRequest(BaseModel):
-    extend_days: int | None = None
+    expire_days: int | None = None  # absolute: now+N days; 0 or -1 = never expires
     is_enabled: bool | None = None

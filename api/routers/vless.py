@@ -61,13 +61,17 @@ async def create_user(
             content=body.model_dump(),
         )
 
+    expiry_ms = (
+        0 if req.expire_days <= 0
+        else int((time.time() + req.expire_days * 86400) * 1000)
+    )
     client_data = {
         "id": str(uuid.uuid4()),
         "flow": "xtls-rprx-vision",
         "email": req.external_id,
         "limitIp": 0,
         "totalGB": 0,
-        "expiryTime": int((time.time() + req.expire_days * 86400) * 1000),
+        "expiryTime": expiry_ms,
         "enable": True,
         "tgId": "",
         "subId": generate_sub_id(),
@@ -100,7 +104,7 @@ async def get_user(
 @router.patch(
     "/users/{external_id}",
     response_model=VlessUserResponse,
-    summary="Update VLESS user (extend expiry and/or toggle enabled)",
+    summary="Update VLESS user (set expiry and/or toggle enabled)",
 )
 async def update_user(
     external_id: str,
@@ -117,13 +121,12 @@ async def update_user(
 
     client = dict(client)  # copy — never mutate the inbound dict in-place
 
-    if req.extend_days is not None:
-        now_ms = int(time.time() * 1000)
-        old_expiry = client.get("expiryTime") or 0
-        # Extend from current expiry if subscription is still active;
-        # from now if it has already expired or was set to "never" (0).
-        base = old_expiry if old_expiry > now_ms else now_ms
-        client["expiryTime"] = base + req.extend_days * 86400 * 1000
+    if req.expire_days is not None:
+        # Absolute semantics: 0 or -1 = never expires; N > 0 = now + N days
+        if req.expire_days <= 0:
+            client["expiryTime"] = 0
+        else:
+            client["expiryTime"] = int(time.time() * 1000) + req.expire_days * 86400 * 1000
 
     if req.is_enabled is not None:
         client["enable"] = req.is_enabled
