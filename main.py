@@ -142,9 +142,8 @@ async def _log_requests(request: Request, call_next):
         "path": request.url.path,
         "status": response.status_code,
         "duration_ms": round((time.monotonic() - start) * 1000, 1),
+        "client_ip": request.client.host if request.client else None,
     }
-    if response.status_code in (401, 403):
-        fields["client_ip"] = request.client.host if request.client else None
     logger.info("request", **fields)
     return response
 
