@@ -1,0 +1,28 @@
+# ── Секреты и локальные тест-фикстуры — НИКОГДА в образ ──────────────────────
+.env
+.env.*
+fake_mtg_config.toml
+
+# ── Виртуальное окружение и байткод Python ────────────────────────────────────
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# ── VCS / IDE ─────────────────────────────────────────────────────────────────
+.git/
+.gitignore
+.idea/
+.vscode/
+
+# ── Тесты, спеки, мета — не нужны в рантайм-образе ──────────────────────────
+_smoke_test.py
+test_xui.py
+tz/
+Dockerfile
+.dockerignore
+docker-compose*.yml
+Makefile
+scripts/
+*.md
+uv.lock

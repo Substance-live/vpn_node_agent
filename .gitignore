@@ -21,8 +21,5 @@ env/
 .vscode/
 *.iml
 
-# Docker build cache
-.dockerignore
-
 # TZ (internal specs, not for repo)
 tz/
