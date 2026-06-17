@@ -51,8 +51,27 @@ fi
 # ── 3. .env ───────────────────────────────────────────────────────────────────
 echo "[3/3] Файл .env..."
 if [ ! -f .env ]; then
-  cp .env.example .env
-  echo "      .env создан из .env.example"
+  AGENT_SECRET=$(openssl rand -hex 32)
+  cat > .env <<EOF
+AGENT_SECRET=$AGENT_SECRET
+
+# 3x-ui
+XUI_BASE_URL=http://127.0.0.1:<Listen Port in panel>/<URI Path in panel>
+XUI_USERNAME=<login in panel>
+XUI_PASSWORD=<password in panel>
+XUI_VLESS_INBOUND_ID=1
+
+# MTProto
+MTG_CONFIG_PATH=/etc/mtg/config.toml
+MTG_SERVER_IP=<ip server>
+MTG_PORT=2443
+
+# Server
+PORT=8080
+LOG_LEVEL=INFO
+LOG_FORMAT=console
+EOF
+  echo "      .env создан (AGENT_SECRET сгенерирован автоматически)"
 else
   echo "      .env уже существует — пропускаю"
 fi
@@ -64,11 +83,10 @@ echo ""
 echo "  1. Заполните .env (ОБЯЗАТЕЛЬНО перед первым запуском):"
 echo "       nano .env"
 echo "     Ключевые переменные:"
-echo "       AGENT_SECRET   — сильный случайный секрет (openssl rand -hex 32)"
-echo "       XUI_PASSWORD   — пароль панели 3x-ui"
-echo "       MTG_SERVER_IP  — публичный IP этого сервера"
-echo "       XUI_BASE_URL   — http://host.docker.internal:2053"
-echo "                        (или с кастомным путём панели, если задан)"
+echo "       AGENT_SECRET        — уже сгенерирован автоматически"
+echo "       XUI_BASE_URL        — http://127.0.0.1:<port>/<base-path>"
+echo "       XUI_USERNAME/PASSWORD — логин и пароль панели 3x-ui"
+echo "       MTG_SERVER_IP       — публичный IP этого сервера"
 echo ""
 echo "  2. Поднимите стек:"
 echo "       docker compose up -d"

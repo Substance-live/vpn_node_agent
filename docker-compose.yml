@@ -44,24 +44,21 @@ services:
 
   # ── Node Agent: REST API для Orchestrator ───────────────────────────────────
   # Собирает образ из Dockerfile в корне репо.
-  # Слушает только на 127.0.0.1:8080 — снаружи через nginx с TLS (Этап 9).
-  # Связь с host-сетевой 3x-ui — через host.docker.internal (extra_hosts).
-  # XUI_BASE_URL в .env должен быть http://host.docker.internal:2053
+  # network_mode: host — uvicorn слушает 0.0.0.0:8080 напрямую на хосте.
+  # Это позволяет обращаться к 3x-ui по 127.0.0.1 даже если панель слушает
+  # только на loopback (типичная конфигурация с кастомным портом и путём).
+  # XUI_BASE_URL в .env: http://127.0.0.1:<port>[/<base-path>]
   node-agent:
     build: .
     image: vpn-node-agent:latest
     container_name: node-agent
-    ports:
-      - "127.0.0.1:8080:8080"
+    network_mode: host
     env_file: .env
     volumes:
       # Путь к config.toml mtg на хосте.
-      # Сценарий A (чистый стек):   MTG_CONFIG_HOST_PATH не задан → ./config/mtg/config.toml
+      # Сценарий A (чистый стек):      MTG_CONFIG_HOST_PATH не задан → ./config/mtg/config.toml
       # Сценарий B (mtg уже работает): MTG_CONFIG_HOST_PATH=/etc/mtg/config.toml в .env
       - ${MTG_CONFIG_HOST_PATH:-./config/mtg/config.toml}:/etc/mtg/config.toml:ro
-    extra_hosts:
-      # host-gateway резолвится в IP хост-машины, нужен для доступа к 3x-ui
-      - "host.docker.internal:host-gateway"
     depends_on:
       - 3x-ui
       - mtproto-proxy
