@@ -51,8 +51,6 @@ pyyaml==6.0.3
     # via uvicorn
 starlette==1.2.1
     # via fastapi
-structlog==26.1.0
-    # via vpn-node-agent (pyproject.toml)
 typing-extensions==4.15.0
     # via
     #   anyio

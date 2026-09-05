@@ -1,5 +1,5 @@
 """VLESS client management endpoints (full CRUD)."""
-
+import logging
 import time
 import uuid
 
@@ -10,7 +10,6 @@ from api.dependencies import get_xui, verify_agent_secret
 from api.errors import XuiClientAlreadyExistsError, XuiClientNotFoundError
 from api.schemas import VlessCreateRequest, VlessUpdateRequest, VlessUserResponse
 from core.config import settings
-from core.logging import get_logger
 
 router = APIRouter(
     prefix="/api/v1/vless",
@@ -18,7 +17,7 @@ router = APIRouter(
     dependencies=[Depends(verify_agent_secret)],
 )
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 _INBOUND_ID = settings.XUI_VLESS_INBOUND_ID
 
@@ -41,10 +40,10 @@ def _expiry_ms(expire_days: int) -> int:
 
 
 async def _build_response(
-    xui: XuiAdapter,
-    inbound: dict,
-    client: dict,
-    remark: str | None,
+        xui: XuiAdapter,
+        inbound: dict,
+        client: dict,
+        remark: str | None,
 ) -> VlessUserResponse:
     """Assemble a VlessUserResponse from an already-fetched inbound + client dict."""
     traffic = await xui.get_client_traffic(client["email"]) or {}
@@ -68,14 +67,14 @@ async def _build_response(
     summary="Create VLESS user (idempotent — returns 409 if already exists)",
 )
 async def create_user(
-    req: VlessCreateRequest,
-    xui: XuiAdapter = Depends(get_xui),
+        req: VlessCreateRequest,
+        xui: XuiAdapter = Depends(get_xui),
 ) -> VlessUserResponse:
     inbound = await xui.get_inbound(_INBOUND_ID)
     existing = xui.find_client(inbound, req.external_id)
     if existing:
         # Idempotent: raise 409 with full existing-client payload attached
-        logger.info("vless_user_exists", external_id=req.external_id)
+        logger.info(f"vless_user_exists, external_id={req.external_id}")
         body = await _build_response(xui, inbound, existing, req.remark)
         raise XuiClientAlreadyExistsError(existing=body.model_dump())
 
@@ -92,7 +91,7 @@ async def create_user(
         "reset": 0,
     }
     await xui.add_client(_INBOUND_ID, client_data)
-    logger.info("vless_user_created", external_id=req.external_id, expire_days=req.expire_days)
+    logger.info(f"vless_user_created, external_id={req.external_id}, expire_days={req.expire_days}")
     # Traffic for a brand-new client is always 0/0 (no stats record yet)
     return await _build_response(xui, inbound, client_data, req.remark)
 
@@ -103,8 +102,8 @@ async def create_user(
     summary="Get VLESS user info and traffic stats",
 )
 async def get_user(
-    external_id: str,
-    xui: XuiAdapter = Depends(get_xui),
+        external_id: str,
+        xui: XuiAdapter = Depends(get_xui),
 ) -> VlessUserResponse:
     inbound = await xui.get_inbound(_INBOUND_ID)
     client = xui.find_client(inbound, external_id)
@@ -119,9 +118,9 @@ async def get_user(
     summary="Update VLESS user (set expiry and/or toggle enabled)",
 )
 async def update_user(
-    external_id: str,
-    req: VlessUpdateRequest,
-    xui: XuiAdapter = Depends(get_xui),
+        external_id: str,
+        req: VlessUpdateRequest,
+        xui: XuiAdapter = Depends(get_xui),
 ) -> VlessUserResponse:
     inbound = await xui.get_inbound(_INBOUND_ID)
     client = xui.find_client(inbound, external_id)
@@ -138,10 +137,10 @@ async def update_user(
 
     await xui.update_client(_INBOUND_ID, client["id"], client)
     logger.info(
-        "vless_user_updated",
-        external_id=external_id,
-        expire_days=req.expire_days,
-        is_enabled=req.is_enabled,
+        f"vless_user_updated, "
+        f"external_id={external_id}, "
+        f"expire_days={req.expire_days}, "
+        f"is_enabled={req.is_enabled}"
     )
     return await _build_response(xui, inbound, client, external_id)
 
@@ -152,13 +151,13 @@ async def update_user(
     summary="Delete VLESS user",
 )
 async def delete_user(
-    external_id: str,
-    xui: XuiAdapter = Depends(get_xui),
+        external_id: str,
+        xui: XuiAdapter = Depends(get_xui),
 ) -> Response:
     inbound = await xui.get_inbound(_INBOUND_ID)
     client = xui.find_client(inbound, external_id)
     if client is None:
         raise XuiClientNotFoundError(f"No VLESS client with external_id={external_id!r}")
     await xui.delete_client(_INBOUND_ID, client["id"])
-    logger.info("vless_user_deleted", external_id=external_id)
+    logger.info(f"vless_user_deleted, external_id={external_id}")
     return Response(status_code=status.HTTP_204_NO_CONTENT)

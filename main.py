@@ -1,3 +1,5 @@
+import logging
+import sys
 import time
 from contextlib import asynccontextmanager
 
@@ -12,12 +14,13 @@ from adapters.xui_adapter import XuiAdapter
 from api.errors import AgentError, XuiClientAlreadyExistsError
 from api.routers import health, mtproto, vless
 from core.config import settings
-from core.logging import configure_logging, get_logger
 
-# Configure logging before anything else
-configure_logging(settings.LOG_LEVEL, settings.LOG_FORMAT)
-
-logger = get_logger(__name__)
+logging.basicConfig(
+    level=settings.LOG_LEVEL,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    stream=sys.stdout,
+)
+logger = logging.getLogger(__name__)
 
 
 # ── Lifespan (startup / shutdown) ─────────────────────────────────────────────
@@ -34,7 +37,7 @@ async def lifespan(app: FastAPI):
         password=settings.XUI_PASSWORD,
         inbound_id=settings.XUI_VLESS_INBOUND_ID,
     )
-    logger.info("xui_adapter_created", base_url=settings.XUI_BASE_URL)
+    logger.info(f"xui_adapter_created, base_url={settings.XUI_BASE_URL}")
 
     yield  # application runs here
 
@@ -54,7 +57,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-
 # ── Exception handlers ────────────────────────────────────────────────────────
 
 # Maps common HTTP status codes to stable machine-readable error slugs.
@@ -69,7 +71,7 @@ _HTTP_ERROR_CODES: dict[int, str] = {
 
 @app.exception_handler(StarletteHTTPException)
 async def _http_exception_handler(
-    request: Request, exc: StarletteHTTPException
+        request: Request, exc: StarletteHTTPException
 ) -> JSONResponse:
     """Wrap FastAPI/Starlette HTTP errors (auth 403, route 404, …) in unified envelope."""
     code = _HTTP_ERROR_CODES.get(exc.status_code, "http_error")
@@ -82,7 +84,7 @@ async def _http_exception_handler(
 
 @app.exception_handler(RequestValidationError)
 async def _validation_handler(
-    request: Request, exc: RequestValidationError
+        request: Request, exc: RequestValidationError
 ) -> JSONResponse:
     """Wrap Pydantic validation failures (422) in unified envelope with structured details."""
     return JSONResponse(
@@ -99,7 +101,7 @@ async def _validation_handler(
 async def _agent_error_handler(request: Request, exc: AgentError) -> JSONResponse:
     """Convert any AgentError subclass to a uniform JSON error envelope."""
     if exc.status_code >= 500:
-        logger.warning(exc.error, details=str(exc), path=str(request.url.path))
+        logger.warning(f"{exc.error}, details={str(exc)}, path={str(request.url.path)}")
     content: dict = {
         "error": exc.error,
         "message": exc.message,
@@ -115,7 +117,7 @@ async def _agent_error_handler(request: Request, exc: AgentError) -> JSONRespons
 @app.exception_handler(Exception)
 async def _unhandled_handler(request: Request, exc: Exception) -> JSONResponse:
     """Catch-all for unexpected errors — logs full traceback, returns 500."""
-    logger.error("unhandled_exception", path=str(request.url.path), exc_info=True)
+    logger.error(f"unhandled_exception, path={str(request.url.path)}", exc_info=True)
     return JSONResponse(
         status_code=500,
         content={
@@ -144,15 +146,14 @@ async def _log_requests(request: Request, call_next):
         "duration_ms": round((time.monotonic() - start) * 1000, 1),
         "client_ip": request.client.host if request.client else None,
     }
-    logger.info("request", **fields)
+    logger.info(f"request, fields={fields}")
     return response
 
 
 # ── Routers ───────────────────────────────────────────────────────────────────
-app.include_router(health.router)     # Stage 1 — GET /api/v1/health (public)
-app.include_router(mtproto.router)    # Stage 3 — GET /api/v1/mtproto/info (auth required)
-app.include_router(vless.router)      # Stage 5 — CRUD /api/v1/vless/users
-
+app.include_router(health.router)  # Stage 1 — GET /api/v1/health (public)
+app.include_router(mtproto.router)  # Stage 3 — GET /api/v1/mtproto/info (auth required)
+app.include_router(vless.router)  # Stage 5 — CRUD /api/v1/vless/users
 
 if __name__ == "__main__":
     uvicorn.run(
