@@ -12,7 +12,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from adapters.xui_adapter import XuiAdapter
 from api.errors import AgentError, XuiClientAlreadyExistsError
-from api.routers import health, mtproto, vless
+from api.routers import main_router
 from core.config import settings
 
 logging.basicConfig(
@@ -149,11 +149,7 @@ async def _log_requests(request: Request, call_next):
     logger.info(f"request, fields={fields}")
     return response
 
-
-# ── Routers ───────────────────────────────────────────────────────────────────
-app.include_router(health.router)  # Stage 1 — GET /api/v1/health (public)
-app.include_router(mtproto.router)  # Stage 3 — GET /api/v1/mtproto/info (auth required)
-app.include_router(vless.router)  # Stage 5 — CRUD /api/v1/vless/users
+app.include_router(main_router)
 
 if __name__ == "__main__":
     uvicorn.run(
