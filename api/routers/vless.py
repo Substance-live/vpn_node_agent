@@ -137,10 +137,10 @@ async def update_user(
 
     await xui.update_client(_INBOUND_ID, client["id"], client)
     logger.info(
-        f"vless_user_updated, "
-        f"external_id={external_id}, "
-        f"expire_days={req.expire_days}, "
-        f"is_enabled={req.is_enabled}"
+    f"vless_user_updated, "
+    f"external_id={external_id}, "
+    f"expire_days={req.expire_days}, "
+    f"is_enabled={req.is_enabled}"
     )
     return await _build_response(xui, inbound, client, external_id)
 

@@ -27,7 +27,6 @@ class Settings(BaseSettings):
 
     # Logging
     LOG_LEVEL: str = "INFO"
-    LOG_FORMAT: str = "json"  # "json" for prod, "console" for dev
 
 
 settings = Settings()
